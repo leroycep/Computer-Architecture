@@ -39,15 +39,21 @@ pub fn ls8_to_bin(allocator: *std.mem.Allocator, text: []const u8) ![]u8 {
     errdefer bin.deinit();
 
     var line_iterator = std.mem.tokenize(text, "\n");
+    var line_number: usize = 0;
     while (true) {
-        const opcode_byte = (try next_byte(&line_iterator)) orelse break;
-        const opcode = try cpu.Instruction.decode(opcode_byte);
+        const opcode_byte = (try next_byte(&line_iterator, &line_number)) orelse break;
+        const opcode = cpu.Instruction.decode(opcode_byte) catch |e| switch (e) {
+            error.InvalidInstruction => {
+                std.log.err(.LS8ToBin, "Invalid instruction at line {}: {b}", .{line_number, opcode_byte});
+                return e;
+            },
+        };
 
         try bin.append(@enumToInt(opcode));
 
         var num_operands = opcode.number_operands();
         while (num_operands != 0) : (num_operands -= 1) {
-            const operand = (try next_byte(&line_iterator)) orelse return error.UnexpectedEndOfFile;
+            const operand = (try next_byte(&line_iterator, &line_number)) orelse return error.UnexpectedEndOfFile;
 
             try bin.append(operand);
         }
@@ -56,11 +62,12 @@ pub fn ls8_to_bin(allocator: *std.mem.Allocator, text: []const u8) ![]u8 {
     return bin.toOwnedSlice();
 }
 
-pub fn next_byte(line_iterator: *std.mem.TokenIterator) !?u8 {
+pub fn next_byte(line_iterator: *std.mem.TokenIterator, line_number: *usize) !?u8 {
     // There can be empty lines (or lines just for comments), and we want to find
     // the next non empty line
     while (true) {
         const line = line_iterator.next() orelse return null;
+        line_number.* += 1;
         if (try line_to_byte(line)) |byte| {
             return byte;
         }
