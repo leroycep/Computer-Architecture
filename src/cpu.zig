@@ -88,6 +88,16 @@ pub const Cpu = struct {
         };
     }
 
+    pub fn push_stack(this: *@This(), value: u8) void {
+        _ = @subWithOverflow(u8, this.registers[SP], 1, &this.registers[SP]);
+        this.memory[this.registers[SP]] = value;
+    }
+
+    pub fn pop_stack(this: *@This()) u8 {
+        defer _ = @addWithOverflow(u8, this.registers[SP], 1, &this.registers[SP]);
+        return this.memory[this.registers[SP]];
+    }
+
     pub fn run(this: *@This()) !void {
         const stdout = std.io.getStdOut().writer();
         while (true) {
@@ -95,6 +105,11 @@ pub const Cpu = struct {
             switch (instruction) {
                 .NOP => {},
                 .HLT => break,
+                .ADD => {
+                    const a = this.memory[this.program_counter + 1];
+                    const b = this.memory[this.program_counter + 2];
+                    this.registers[a] += this.registers[b];
+                },
                 .MUL => {
                     const a = this.memory[this.program_counter + 1];
                     const b = this.memory[this.program_counter + 2];
@@ -112,14 +127,22 @@ pub const Cpu = struct {
                 },
                 .PUSH => {
                     const register = this.memory[this.program_counter + 1];
-                    this.registers[SP] -= 1;
-                    this.memory[this.registers[SP]] = this.registers[register];
+                    this.push_stack(this.registers[register]);
                 },
                 .POP => {
                     const register = this.memory[this.program_counter + 1];
-                    this.registers[register] = this.memory[this.registers[SP]];
-                    this.registers[SP] += 1;
+                    this.registers[register] = this.pop_stack();
                 },
+                .CALL => {
+                    const register = this.memory[this.program_counter + 1];
+
+                    var return_address: u8 = 0;
+                    _ = @addWithOverflow(u8, this.program_counter, instruction.number_operands() + 1, &return_address);
+                    this.push_stack(return_address);
+
+                    this.program_counter = this.registers[register];
+                },
+                .RET => this.program_counter = this.pop_stack(),
                 else => {
                     std.log.err(.LS8ToBin, "Unimplemented instruction at memory address 0x{x:0>2}: {}", .{ this.program_counter, instruction });
                     return error.UnimplementedInstruction;
@@ -250,8 +273,10 @@ pub const Instruction = enum(u8) {
         return switch (val) {
             @enumToInt(@This().NOP) => .NOP,
             @enumToInt(@This().HLT) => .HLT,
+            @enumToInt(@This().ADD) => .ADD,
             @enumToInt(@This().MUL) => .MUL,
             @enumToInt(@This().CALL) => .CALL,
+            @enumToInt(@This().RET) => .RET,
             @enumToInt(@This().PUSH) => .PUSH,
             @enumToInt(@This().POP) => .POP,
             @enumToInt(@This().LDI) => .LDI,
