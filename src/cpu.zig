@@ -131,6 +131,9 @@ pub const Instruction = enum(u8) {
     /// Add
     ADD = 0b10100000,
 
+    /// Add
+    SUB = 0b10100001,
+
     /// Divide
     DIV = 0b10100011,
 
@@ -149,8 +152,26 @@ pub const Instruction = enum(u8) {
     /// Bitwise OR
     OR = 0b10101010,
 
+    /// Bitwise XOR
+    XOR = 0b10101011,
+
+    /// Shift the bits in registerA registerB left
+    SHL = 0b10101100,
+
+    /// Shift the bits in registerA registerB right
+    SHR = 0b10101101,
+
     /// Call subroutine
     CALL = 0b01010000,
+
+    /// Return from subroutine
+    RET = 0b00010001,
+
+    /// Pop value off of the stack and into the given register
+    POP = 0b01000110,
+
+    /// Push value from given register onto the stack
+    PUSH = 0b01000101,
 
     /// Compare
     CMP = 0b10100111,
@@ -172,6 +193,9 @@ pub const Instruction = enum(u8) {
 
     /// Loads the data into registerA from the address in registerB
     LD = 0b10000011,
+
+    /// Stores the data in registerB to the address in registerA
+    ST = 0b10000100,
 
     /// Set registerA to the immediate value
     LDI = 0b10000010,
