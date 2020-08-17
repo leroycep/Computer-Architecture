@@ -110,7 +110,20 @@ pub const Cpu = struct {
                     const value = this.registers[register];
                     try stdout.print("{}", .{value});
                 },
-                else => {},
+                .PUSH => {
+                    const register = this.memory[this.program_counter + 1];
+                    this.registers[SP] -= 1;
+                    this.memory[this.registers[SP]] = this.registers[register];
+                },
+                .POP => {
+                    const register = this.memory[this.program_counter + 1];
+                    this.registers[register] = this.memory[this.registers[SP]];
+                    this.registers[SP] += 1;
+                },
+                else => {
+                    std.log.err(.LS8ToBin, "Unimplemented instruction at memory address 0x{x:0>2}: {}", .{ this.program_counter, instruction });
+                    return error.UnimplementedInstruction;
+                },
             }
             if (!instruction.sets_program_counter()) {
                 var result: u8 = 0;
@@ -238,6 +251,9 @@ pub const Instruction = enum(u8) {
             @enumToInt(@This().NOP) => .NOP,
             @enumToInt(@This().HLT) => .HLT,
             @enumToInt(@This().MUL) => .MUL,
+            @enumToInt(@This().CALL) => .CALL,
+            @enumToInt(@This().PUSH) => .PUSH,
+            @enumToInt(@This().POP) => .POP,
             @enumToInt(@This().LDI) => .LDI,
             @enumToInt(@This().PRN) => .PRN,
             else => error.InvalidInstruction,
