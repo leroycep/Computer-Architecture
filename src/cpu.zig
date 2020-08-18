@@ -1,6 +1,7 @@
 const std = @import("std");
 
-const MAX_FILE_SIZE = 1024 * 1024 * 1024;
+/// Our CPU's memory size is 256, and the end of the space is for the stack and misc other stuff
+const MAX_FILE_SIZE = 240;
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
