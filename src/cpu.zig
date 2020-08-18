@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 
 /// Our CPU's memory size is 256, and the end of the space is for the stack and misc other stuff
 const MAX_FILE_SIZE = 240;
@@ -23,7 +24,7 @@ pub fn main() !void {
     defer allocator.free(program);
 
     // Initialize CPU
-    var cpu = Cpu.init(allocator);
+    var cpu = Cpu.init();
 
     // Load program into memory
     std.mem.copy(u8, &cpu.memory, program);
@@ -32,7 +33,6 @@ pub fn main() !void {
 }
 
 pub const Cpu = struct {
-    allocator: *std.mem.Allocator,
     memory: [256]u8,
     registers: [8]u8,
 
@@ -83,12 +83,11 @@ pub const Cpu = struct {
     /// The interrupt number that key presses call
     pub const KEYBOARD_INTERRUPT = 1;
 
-    pub fn init(allocator: *std.mem.Allocator) @This() {
+    pub fn init() @This() {
         var registers = [_]u8{0} ** 8;
         registers[SP] = STACK_INIT;
 
         return .{
-            .allocator = allocator,
             // Initialize ram to 0
             .memory = [_]u8{0} ** 256,
             .registers = registers,
@@ -171,20 +170,12 @@ pub const Cpu = struct {
         const stdout = std.io.getStdOut().writer();
         this.last_timer_interrupt = try std.time.Timer.start();
 
-        var is_running = true;
-
-        var keyboard_input_queue = std.atomic.Queue(KeyboardInputThread.Error!u8).init();
-
-        const keyboard_input_context = KeyboardInputThread{
-            .allocator = this.allocator,
-            .is_running = &is_running,
-            .key_queue = &keyboard_input_queue,
-        };
-        const keyboard_input_thread = try std.Thread.spawn(keyboard_input_context, KeyboardInputThread.run);
-        defer {
-            is_running = false;
-            keyboard_input_thread.wait();
+        var stdin_file = std.io.getStdIn();
+        if (builtin.os.tag == .linux) {
+            const flags = try std.os.fcntl(stdin_file.handle, std.os.F_GETFL, 0);
+            _ = try std.os.fcntl(stdin_file.handle, std.os.F_SETFL, flags | std.os.O_NONBLOCK);
         }
+        const stdin = stdin_file.reader();
 
         while (true) {
             // Check timer interrupt
@@ -193,14 +184,12 @@ pub const Cpu = struct {
                     this.last_timer_interrupt.reset();
                     this.interrupt(TIMER_INTERRUPT);
                 }
-                if (keyboard_input_queue.get()) |node| {
-                    defer this.allocator.destroy(node);
-                    const key = node.data catch |e| switch (e) {
-                        error.EndOfStream => break,
-                        else => |ue| return ue,
-                    };
-                    this.memory[MEM_ADDR_KEY_PRESSED] = key;
+                if (stdin.readByte()) |byte| {
+                    this.memory[MEM_ADDR_KEY_PRESSED] = byte;
                     this.interrupt(KEYBOARD_INTERRUPT);
+                } else |err| {
+                    if (err != error.WouldBlock)
+                        return err;
                 }
             }
 
@@ -384,46 +373,6 @@ pub const Cpu = struct {
                 var result: u8 = 0;
                 this.program_counter +%= instruction.number_operands() + 1;
             }
-        }
-    }
-};
-
-const KeyboardInputThread = struct {
-    allocator: *std.mem.Allocator,
-
-    /// Whether the main thread is still running
-    is_running: *bool,
-
-    /// Whether a key was pressed
-    key_queue: *std.atomic.Queue(Error!u8),
-
-    pub const Error = std.fs.File.ReadError || error{EndOfStream};
-
-    pub fn run(this: @This()) void {
-        const stdin = std.io.getStdIn().reader();
-        while (this.is_running.*) {
-            const node = this.allocator.create(std.atomic.Queue(Error!u8).Node) catch |e| {
-                std.log.err(.KeyboardInputThread, "Keyboard input thread is out of memory!", .{});
-                return;
-            };
-            const byte = stdin.readByte() catch |e| {
-                node.* = .{
-                    .prev = undefined,
-                    .next = undefined,
-                    .data = e,
-                };
-                this.key_queue.put(node);
-                return;
-            };
-            node.* = .{
-                .prev = undefined,
-                .next = undefined,
-                .data = byte,
-            };
-            this.key_queue.put(node);
-        }
-        while (this.key_queue.get()) |node| {
-            defer this.allocator.destroy(node);
         }
     }
 };
