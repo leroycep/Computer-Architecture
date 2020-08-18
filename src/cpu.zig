@@ -118,10 +118,25 @@ pub const Cpu = struct {
                     const b = this.memory[this.program_counter + 2];
                     _ = @addWithOverflow(u8, this.registers[a], this.registers[b], &this.registers[a]);
                 },
+                .SUB => {
+                    const a = this.memory[this.program_counter + 1];
+                    const b = this.memory[this.program_counter + 2];
+                    _ = @subWithOverflow(u8, this.registers[a], this.registers[b], &this.registers[a]);
+                },
                 .MUL => {
                     const a = this.memory[this.program_counter + 1];
                     const b = this.memory[this.program_counter + 2];
                     _ = @mulWithOverflow(u8, this.registers[a], this.registers[b], &this.registers[a]);
+                },
+                .DIV => {
+                    const a = this.memory[this.program_counter + 1];
+                    const b = this.memory[this.program_counter + 2];
+                    this.registers[a] /= this.registers[b];
+                },
+                .MOD => {
+                    const a = this.memory[this.program_counter + 1];
+                    const b = this.memory[this.program_counter + 2];
+                    this.registers[a] %= this.registers[b];
                 },
                 .INC => {
                     const register = this.memory[this.program_counter + 1];
@@ -130,6 +145,48 @@ pub const Cpu = struct {
                 .DEC => {
                     const register = this.memory[this.program_counter + 1];
                     _ = @subWithOverflow(u8, this.registers[register], 1, &this.registers[register]);
+                },
+                .AND => {
+                    const a = this.memory[this.program_counter + 1];
+                    const b = this.memory[this.program_counter + 2];
+                    this.registers[a] = this.registers[a] & this.registers[b];
+                },
+                .NOT => {
+                    const a = this.memory[this.program_counter + 1];
+                    this.registers[a] = ~this.registers[a];
+                },
+                .OR => {
+                    const a = this.memory[this.program_counter + 1];
+                    const b = this.memory[this.program_counter + 2];
+                    this.registers[a] = this.registers[a] | this.registers[b];
+                },
+                .XOR => {
+                    const a = this.memory[this.program_counter + 1];
+                    const b = this.memory[this.program_counter + 2];
+                    this.registers[a] = this.registers[a] ^ this.registers[b];
+                },
+                .SHL => {
+                    const a = this.memory[this.program_counter + 1];
+                    const b = this.memory[this.program_counter + 2];
+                    if (this.registers[b] >= 8) {
+                        this.registers[a] = 0;
+                    } else {
+                        this.registers[a] <<= @intCast(u3, this.registers[b]);
+                    }
+                },
+                .SHR => {
+                    const a = this.memory[this.program_counter + 1];
+                    const b = this.memory[this.program_counter + 2];
+                    if (this.registers[b] >= 8) {
+                        this.registers[a] = 0;
+                    } else {
+                        this.registers[a] >>= @intCast(u3, this.registers[b]);
+                    }
+                },
+                .ST => {
+                    const registerA = this.memory[this.program_counter + 1];
+                    const registerB = this.memory[this.program_counter + 2];
+                    this.memory[this.registers[registerA]] = this.registers[registerB];
                 },
                 .LD => {
                     const registerA = this.memory[this.program_counter + 1];
@@ -192,10 +249,31 @@ pub const Cpu = struct {
                 } else {
                     did_not_jump = true;
                 },
-                else => {
-                    std.log.err(.LS8ToBin, "Unimplemented instruction at memory address 0x{x:0>2}: {}", .{ this.program_counter, instruction });
-                    return error.UnimplementedInstruction;
+                .JGE => if (this.flags.greater_than or this.flags.equal) {
+                    const jump_address = this.registers[this.memory[this.program_counter + 1]];
+                    this.program_counter = jump_address;
+                } else {
+                    did_not_jump = true;
                 },
+                .JGT => if (this.flags.greater_than) {
+                    const jump_address = this.registers[this.memory[this.program_counter + 1]];
+                    this.program_counter = jump_address;
+                } else {
+                    did_not_jump = true;
+                },
+                .JLE => if (this.flags.less_than or this.flags.equal) {
+                    const jump_address = this.registers[this.memory[this.program_counter + 1]];
+                    this.program_counter = jump_address;
+                } else {
+                    did_not_jump = true;
+                },
+                .JLT => if (this.flags.less_than) {
+                    const jump_address = this.registers[this.memory[this.program_counter + 1]];
+                    this.program_counter = jump_address;
+                } else {
+                    did_not_jump = true;
+                },
+                .INT, .IRET => return error.InterruptsNotImplemented,
             }
             if (!instruction.sets_program_counter() or did_not_jump) {
                 var result: u8 = 0;
