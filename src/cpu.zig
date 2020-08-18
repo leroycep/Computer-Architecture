@@ -424,6 +424,9 @@ const KeyboardInputThread = struct {
             };
             this.key_queue.put(node);
         }
+        while (this.key_queue.get()) |node| {
+            defer this.allocator.destroy(node);
+        }
     }
 };
 
