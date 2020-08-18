@@ -107,12 +107,12 @@ pub const Cpu = struct {
     }
 
     pub fn push_stack(this: *@This(), value: u8) void {
-        _ = @subWithOverflow(u8, this.registers[SP], 1, &this.registers[SP]);
+        this.registers[SP] -%= 1;
         this.memory[this.registers[SP]] = value;
     }
 
     pub fn pop_stack(this: *@This()) u8 {
-        defer _ = @addWithOverflow(u8, this.registers[SP], 1, &this.registers[SP]);
+        defer this.registers[SP] +%= 1;
         return this.memory[this.registers[SP]];
     }
 
@@ -218,17 +218,17 @@ pub const Cpu = struct {
                 .ADD => {
                     const a = this.memory[this.program_counter + 1];
                     const b = this.memory[this.program_counter + 2];
-                    _ = @addWithOverflow(u8, this.registers[a], this.registers[b], &this.registers[a]);
+                    this.registers[a] +%= this.registers[b];
                 },
                 .SUB => {
                     const a = this.memory[this.program_counter + 1];
                     const b = this.memory[this.program_counter + 2];
-                    _ = @subWithOverflow(u8, this.registers[a], this.registers[b], &this.registers[a]);
+                    this.registers[a] -%= this.registers[b];
                 },
                 .MUL => {
                     const a = this.memory[this.program_counter + 1];
                     const b = this.memory[this.program_counter + 2];
-                    _ = @mulWithOverflow(u8, this.registers[a], this.registers[b], &this.registers[a]);
+                    this.registers[a] *%= this.registers[b];
                 },
                 .DIV => {
                     const a = this.memory[this.program_counter + 1];
@@ -242,11 +242,11 @@ pub const Cpu = struct {
                 },
                 .INC => {
                     const register = this.memory[this.program_counter + 1];
-                    _ = @addWithOverflow(u8, this.registers[register], 1, &this.registers[register]);
+                    this.registers[register] +%= 1;
                 },
                 .DEC => {
                     const register = this.memory[this.program_counter + 1];
-                    _ = @subWithOverflow(u8, this.registers[register], 1, &this.registers[register]);
+                    this.registers[register] -%= 1;
                 },
                 .AND => {
                     const a = this.memory[this.program_counter + 1];
@@ -321,8 +321,7 @@ pub const Cpu = struct {
                 .CALL => {
                     const register = this.memory[this.program_counter + 1];
 
-                    var return_address: u8 = 0;
-                    _ = @addWithOverflow(u8, this.program_counter, instruction.number_operands() + 1, &return_address);
+                    var return_address: u8 = this.program_counter +% instruction.number_operands() + 1;
                     this.push_stack(return_address);
 
                     this.program_counter = this.registers[register];
@@ -383,8 +382,7 @@ pub const Cpu = struct {
             }
             if (!instruction.sets_program_counter() or did_not_jump) {
                 var result: u8 = 0;
-                const did_overflow = @addWithOverflow(u8, this.program_counter, instruction.number_operands() + 1, &result);
-                this.program_counter = result;
+                this.program_counter +%= instruction.number_operands() + 1;
             }
         }
     }
