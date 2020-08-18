@@ -571,4 +571,14 @@ pub const Instruction = enum(u8) {
             else => error.InvalidInstruction,
         };
     }
+
+    pub fn parse(text: []const u8) ?@This() {
+        const type_info = @typeInfo(@This());
+        inline for (type_info.Enum.fields) |field| {
+            if (std.ascii.eqlIgnoreCase(field.name, text)) {
+                return @field(@This(), field.name);
+            }
+        }
+        return null;
+    }
 };
