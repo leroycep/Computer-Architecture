@@ -185,6 +185,12 @@ pub const Cpu = struct {
                 } else {
                     did_not_jump = true;
                 },
+                .JNE => if (!this.flags.equal) {
+                    const jump_address = this.registers[this.memory[this.program_counter + 1]];
+                    this.program_counter = jump_address;
+                } else {
+                    did_not_jump = true;
+                },
                 else => {
                     std.log.err(.LS8ToBin, "Unimplemented instruction at memory address 0x{x:0>2}: {}", .{ this.program_counter, instruction });
                     return error.UnimplementedInstruction;
@@ -260,6 +266,9 @@ pub const Instruction = enum(u8) {
     /// If equal flag is set, jump to the given address
     JEQ = 0b01010101,
 
+    /// If equal flag is not set, jump to the given address
+    JNE = 0b01010110,
+
     /// If greater than flag or the equal flag are set, jump to the given address
     JGE = 0b01011010,
 
@@ -329,6 +338,7 @@ pub const Instruction = enum(u8) {
             @enumToInt(@This().CMP) => .CMP,
             @enumToInt(@This().JMP) => .JMP,
             @enumToInt(@This().JEQ) => .JEQ,
+            @enumToInt(@This().JNE) => .JNE,
             @enumToInt(@This().LD) => .LD,
             @enumToInt(@This().LDI) => .LDI,
             @enumToInt(@This().PRN) => .PRN,
