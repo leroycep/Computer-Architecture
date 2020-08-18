@@ -54,6 +54,10 @@ pub const Cpu = struct {
         equal: bool,
     },
 
+    interrupts_enabled: bool,
+
+    last_timer_interrupt: std.time.Timer,
+
     /// Which register holds the Interrupt Mask
     pub const IM = 5;
 
@@ -68,6 +72,12 @@ pub const Cpu = struct {
 
     /// The initial value of the stack register
     pub const STACK_INIT = 0xF3;
+
+    /// The base address of the interrupt handlers in memory
+    pub const INTERRUPT_VECTORS_BASE = 0xF8;
+
+    /// The interrupt number that the 1 second timer calls
+    pub const TIMER_INTERRUPT = 0;
 
     pub fn init() @This() {
         var registers = [_]u8{0} ** 8;
@@ -86,6 +96,8 @@ pub const Cpu = struct {
                 .greater_than = false,
                 .equal = false,
             },
+            .interrupts_enabled = true,
+            .last_timer_interrupt = undefined,
         };
     }
 
@@ -99,9 +111,67 @@ pub const Cpu = struct {
         return this.memory[this.registers[SP]];
     }
 
+    pub fn interrupt(this: *@This(), num: u3) void {
+        if (!this.interrupts_enabled) return;
+        const check_mask = @as(u8, 1) << num;
+        if (check_mask & this.registers[IM] == check_mask) {
+            this.interrupts_enabled = false;
+
+            // Clear every status bit except for the one being called
+            this.registers[IS] = 0;
+            this.registers[IS] |= check_mask;
+
+            this.push_stack(this.program_counter);
+            this.push_stack(@bitCast(u3, this.flags));
+            this.push_stack(this.registers[0]);
+            this.push_stack(this.registers[1]);
+            this.push_stack(this.registers[2]);
+            this.push_stack(this.registers[3]);
+            this.push_stack(this.registers[4]);
+            this.push_stack(this.registers[5]);
+            this.push_stack(this.registers[6]);
+
+            const handler_address = this.memory[INTERRUPT_VECTORS_BASE + @as(u8, num)];
+            this.program_counter = handler_address;
+        }
+    }
+
+    pub fn interrupt_return(this: *@This()) !void {
+        // If interrupts_enabled is true, IRET was called outside of an Interrupt
+        if (this.interrupts_enabled) return error.InterruptReturnOutsideInterrupt;
+
+        // Clear every status bit except for the one being called
+        this.registers[IS] = 0;
+
+        this.registers[6] = this.pop_stack();
+        this.registers[5] = this.pop_stack();
+        this.registers[4] = this.pop_stack();
+        this.registers[3] = this.pop_stack();
+        this.registers[2] = this.pop_stack();
+        this.registers[1] = this.pop_stack();
+        this.registers[0] = this.pop_stack();
+
+        const flag_val = this.pop_stack();
+        if (flag_val & 0b00000111 != flag_val) {
+            return error.InterruptReturnInvalidFlagsValue;
+        }
+        this.flags = @bitCast(@TypeOf(this.flags), @intCast(u3, flag_val));
+
+        this.program_counter = this.pop_stack();
+
+        this.interrupts_enabled = true;
+    }
+
     pub fn run(this: *@This()) !void {
         const stdout = std.io.getStdOut().writer();
+        this.last_timer_interrupt = try std.time.Timer.start();
         while (true) {
+            // Check timer interrupt
+            if (this.last_timer_interrupt.read() >= 1 * std.time.ns_per_s) {
+                this.last_timer_interrupt.reset();
+                this.interrupt(TIMER_INTERRUPT);
+            }
+
             const instruction = Instruction.decode(this.memory[this.program_counter]) catch |e| switch (e) {
                 error.InvalidInstruction => {
                     std.log.err(.CPU, "Invalid instruction {b:0>8}", .{this.memory[this.program_counter]});
@@ -273,7 +343,11 @@ pub const Cpu = struct {
                 } else {
                     did_not_jump = true;
                 },
-                .INT, .IRET => return error.InterruptsNotImplemented,
+                .INT => {
+                    const register = this.memory[this.program_counter + 1];
+                    this.interrupt(@intCast(u3, this.registers[register]));
+                },
+                .IRET => try this.interrupt_return(),
             }
             if (!instruction.sets_program_counter() or did_not_jump) {
                 var result: u8 = 0;
@@ -418,10 +492,13 @@ pub const Instruction = enum(u8) {
             @enumToInt(@This().JMP) => .JMP,
             @enumToInt(@This().JEQ) => .JEQ,
             @enumToInt(@This().JNE) => .JNE,
+            @enumToInt(@This().ST) => .ST,
             @enumToInt(@This().LD) => .LD,
             @enumToInt(@This().LDI) => .LDI,
             @enumToInt(@This().PRN) => .PRN,
             @enumToInt(@This().PRA) => .PRA,
+            @enumToInt(@This().INT) => .INT,
+            @enumToInt(@This().IRET) => .IRET,
             else => error.InvalidInstruction,
         };
     }
