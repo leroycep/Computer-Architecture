@@ -101,19 +101,39 @@ pub const Cpu = struct {
     pub fn run(this: *@This()) !void {
         const stdout = std.io.getStdOut().writer();
         while (true) {
-            const instruction = try Instruction.decode(this.memory[this.program_counter]);
+            const instruction = Instruction.decode(this.memory[this.program_counter]) catch |e| switch (e) {
+                error.InvalidInstruction => {
+                    std.log.err(.CPU, "Invalid instruction {b:0>8}", .{this.memory[this.program_counter]});
+                    return e;
+                },
+            };
+            // If we didn't jump we need to increment the program counter like normal
+            var did_not_jump = false;
             switch (instruction) {
                 .NOP => {},
                 .HLT => break,
                 .ADD => {
                     const a = this.memory[this.program_counter + 1];
                     const b = this.memory[this.program_counter + 2];
-                    this.registers[a] += this.registers[b];
+                    _ = @addWithOverflow(u8, this.registers[a], this.registers[b], &this.registers[a]);
                 },
                 .MUL => {
                     const a = this.memory[this.program_counter + 1];
                     const b = this.memory[this.program_counter + 2];
-                    this.registers[a] *= this.registers[b];
+                    _ = @mulWithOverflow(u8, this.registers[a], this.registers[b], &this.registers[a]);
+                },
+                .INC => {
+                    const register = this.memory[this.program_counter + 1];
+                    _ = @addWithOverflow(u8, this.registers[register], 1, &this.registers[register]);
+                },
+                .DEC => {
+                    const register = this.memory[this.program_counter + 1];
+                    _ = @subWithOverflow(u8, this.registers[register], 1, &this.registers[register]);
+                },
+                .LD => {
+                    const registerA = this.memory[this.program_counter + 1];
+                    const registerB = this.memory[this.program_counter + 2];
+                    this.registers[registerA] = this.memory[this.registers[registerB]];
                 },
                 .LDI => {
                     const register = this.memory[this.program_counter + 1];
@@ -124,6 +144,11 @@ pub const Cpu = struct {
                     const register = this.memory[this.program_counter + 1];
                     const value = this.registers[register];
                     try stdout.print("{}", .{value});
+                },
+                .PRA => {
+                    const register = this.memory[this.program_counter + 1];
+                    const value = this.registers[register];
+                    _ = try stdout.write(&[_]u8{value});
                 },
                 .PUSH => {
                     const register = this.memory[this.program_counter + 1];
@@ -143,12 +168,29 @@ pub const Cpu = struct {
                     this.program_counter = this.registers[register];
                 },
                 .RET => this.program_counter = this.pop_stack(),
+                .JMP => {
+                    const jump_address = this.registers[this.memory[this.program_counter + 1]];
+                    this.program_counter = jump_address;
+                },
+                .CMP => {
+                    const a = this.memory[this.program_counter + 1];
+                    const b = this.memory[this.program_counter + 2];
+                    this.flags.greater_than = this.registers[a] > this.registers[b];
+                    this.flags.equal = this.registers[a] == this.registers[b];
+                    this.flags.less_than = this.registers[a] < this.registers[b];
+                },
+                .JEQ => if (this.flags.equal) {
+                    const jump_address = this.registers[this.memory[this.program_counter + 1]];
+                    this.program_counter = jump_address;
+                } else {
+                    did_not_jump = true;
+                },
                 else => {
                     std.log.err(.LS8ToBin, "Unimplemented instruction at memory address 0x{x:0>2}: {}", .{ this.program_counter, instruction });
                     return error.UnimplementedInstruction;
                 },
             }
-            if (!instruction.sets_program_counter()) {
+            if (!instruction.sets_program_counter() or did_not_jump) {
                 var result: u8 = 0;
                 const did_overflow = @addWithOverflow(u8, this.program_counter, instruction.number_operands() + 1, &result);
                 this.program_counter = result;
@@ -208,6 +250,9 @@ pub const Instruction = enum(u8) {
 
     /// Push value from given register onto the stack
     PUSH = 0b01000101,
+
+    /// If equal flag is set, jump to the given address
+    JMP = 0b01010100,
 
     /// Compare
     CMP = 0b10100111,
@@ -275,12 +320,19 @@ pub const Instruction = enum(u8) {
             @enumToInt(@This().HLT) => .HLT,
             @enumToInt(@This().ADD) => .ADD,
             @enumToInt(@This().MUL) => .MUL,
+            @enumToInt(@This().INC) => .INC,
+            @enumToInt(@This().DEC) => .DEC,
             @enumToInt(@This().CALL) => .CALL,
             @enumToInt(@This().RET) => .RET,
             @enumToInt(@This().PUSH) => .PUSH,
             @enumToInt(@This().POP) => .POP,
+            @enumToInt(@This().CMP) => .CMP,
+            @enumToInt(@This().JMP) => .JMP,
+            @enumToInt(@This().JEQ) => .JEQ,
+            @enumToInt(@This().LD) => .LD,
             @enumToInt(@This().LDI) => .LDI,
             @enumToInt(@This().PRN) => .PRN,
+            @enumToInt(@This().PRA) => .PRA,
             else => error.InvalidInstruction,
         };
     }
