@@ -1,39 +1,6 @@
 const std = @import("std");
 const cpu = @import("./cpu.zig");
 
-const MAX_FILE_SIZE = 1024 * 1024 * 1024;
-
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer std.debug.assert(!gpa.deinit());
-    const allocator = &gpa.allocator;
-
-    if (std.os.argv.len != 2) {
-        std.log.err(.LS8ToBin, "Incorrect usage. Correct usage:\n\n\t{} ./<filename>.ls8", .{std.os.argv[0]});
-        std.os.exit(1);
-    }
-
-    // Get the input filepath
-    const filename_len = std.mem.len(std.os.argv[1]);
-    const filename = std.os.argv[1][0..filename_len];
-
-    // Append `.bin` to the filepath to get the output file path
-    const output_filepath = try std.fmt.allocPrint(allocator, "{}.bin", .{filename});
-    defer allocator.free(output_filepath);
-
-    // Get the contents of the input file
-    const cwd = std.fs.cwd();
-    const contents = try cwd.readFileAlloc(allocator, filename, MAX_FILE_SIZE);
-    defer allocator.free(contents);
-
-    // Convert the LS8 text into actually binary LS8
-    const bytes = try translate(allocator, contents);
-    defer allocator.free(bytes);
-
-    // Write the binary file
-    try cwd.writeFile(output_filepath, bytes);
-}
-
 pub fn translate(allocator: *std.mem.Allocator, text: []const u8) ![]const u8 {
     var code = std.ArrayList(u8).init(allocator);
     errdefer code.deinit();
@@ -49,7 +16,6 @@ pub fn translate(allocator: *std.mem.Allocator, text: []const u8) ![]const u8 {
     var line_number: usize = 0;
     while (line_iterator.next()) |line_text| : (line_number += 1) {
         const line = try parse_line(line_text);
-        std.log.debug(.ASM, "{}", .{line});
         switch (line) {
             .Byte => |b| try code.append(b),
             .Data => |d| try code.appendSlice(d),

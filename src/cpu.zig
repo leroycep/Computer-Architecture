@@ -1,37 +1,6 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-/// Our CPU's memory size is 256, and the end of the space is for the stack and misc other stuff
-const MAX_FILE_SIZE = 240;
-
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer std.debug.assert(!gpa.deinit());
-    const allocator = &gpa.allocator;
-
-    if (std.os.argv.len != 2) {
-        std.log.err(.LS8ToBin, "Incorrect usage. Correct usage:\n\n\t{} ./<filename>.ls8.bin", .{std.os.argv[0]});
-        std.os.exit(1);
-    }
-
-    // Get the input filepath
-    const filename_len = std.mem.len(std.os.argv[1]);
-    const filename = std.os.argv[1][0..filename_len];
-
-    // Get the contents of the input file
-    const cwd = std.fs.cwd();
-    const program = try cwd.readFileAlloc(allocator, filename, MAX_FILE_SIZE);
-    defer allocator.free(program);
-
-    // Initialize CPU
-    var cpu = Cpu.init();
-
-    // Load program into memory
-    std.mem.copy(u8, &cpu.memory, program);
-
-    try cpu.run();
-}
-
 pub const Cpu = struct {
     memory: [256]u8,
     registers: [8]u8,
