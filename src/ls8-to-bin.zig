@@ -44,8 +44,9 @@ pub fn ls8_to_bin(allocator: *std.mem.Allocator, text: []const u8) ![]u8 {
         const opcode_byte = (try next_byte(&line_iterator, &line_number)) orelse break;
         const opcode = cpu.Instruction.decode(opcode_byte) catch |e| switch (e) {
             error.InvalidInstruction => {
-                std.log.err(.LS8ToBin, "Invalid instruction at line {}: {b}", .{line_number, opcode_byte});
-                return e;
+                std.log.warn(.LS8ToBin, "Invalid instruction at line {}: {b:0>8}", .{ line_number, opcode_byte });
+                try bin.append(opcode_byte);
+                continue;
             },
         };
 
