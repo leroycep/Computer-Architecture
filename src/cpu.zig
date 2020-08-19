@@ -2,164 +2,169 @@ const std = @import("std");
 const builtin = @import("builtin");
 const Instruction = @import("./instruction.zig").Instruction;
 
-pub const Cpu = struct {
-    memory: [256]u8,
-    registers: [8]u8,
+pub fn Cpu(comptime R: type, comptime W: type) type {
+    return struct {
+        input: R,
+        output: W,
+        memory: [256]u8,
+        registers: [8]u8,
 
-    /// Address of the currently executing instruction
-    program_counter: u8,
+        /// Address of the currently executing instruction
+        program_counter: u8,
 
-    /// Contains a copy of the currently executing instruction
-    instruction_register: u8,
+        /// Contains a copy of the currently executing instruction
+        instruction_register: u8,
 
-    /// The memory address we're reading or writing
-    memory_address_register: u8,
+        /// The memory address we're reading or writing
+        memory_address_register: u8,
 
-    /// The data to write or the value just read from memory
-    memory_data_register: u8,
+        /// The data to write or the value just read from memory
+        memory_data_register: u8,
 
-    /// How two numbers compared to each other
-    flags: packed struct {
-        less_than: bool,
-        greater_than: bool,
-        equal: bool,
-    },
+        /// How two numbers compared to each other
+        flags: packed struct {
+            less_than: bool,
+            greater_than: bool,
+            equal: bool,
+        },
 
-    interrupts_enabled: bool,
+        interrupts_enabled: bool,
 
-    last_timer_interrupt: std.time.Timer,
+        last_timer_interrupt: std.time.Timer,
 
-    /// Which register holds the Interrupt Mask
-    pub const IM = 5;
+        halted: bool,
 
-    /// Which register holds the Interrupt Status
-    pub const IS = 6;
+        /// Which register holds the Interrupt Mask
+        pub const IM = 5;
 
-    /// Which register holds the Stack Pointer
-    pub const SP = 7;
+        /// Which register holds the Interrupt Status
+        pub const IS = 6;
 
-    /// The initial value of the stack register
-    pub const MEM_ADDR_KEY_PRESSED = 0xF4;
+        /// Which register holds the Stack Pointer
+        pub const SP = 7;
 
-    /// The initial value of the stack register
-    pub const STACK_INIT = 0xF3;
+        /// The initial value of the stack register
+        pub const MEM_ADDR_KEY_PRESSED = 0xF4;
 
-    /// The base address of the interrupt handlers in memory
-    pub const INTERRUPT_VECTORS_BASE = 0xF8;
+        /// The initial value of the stack register
+        pub const STACK_INIT = 0xF3;
 
-    /// The interrupt number that the 1 second timer calls
-    pub const TIMER_INTERRUPT = 0;
+        /// The base address of the interrupt handlers in memory
+        pub const INTERRUPT_VECTORS_BASE = 0xF8;
 
-    /// The interrupt number that key presses call
-    pub const KEYBOARD_INTERRUPT = 1;
+        /// The interrupt number that the 1 second timer calls
+        pub const TIMER_INTERRUPT = 0;
 
-    pub fn init() @This() {
-        var registers = [_]u8{0} ** 8;
-        registers[SP] = STACK_INIT;
+        /// The interrupt number that key presses call
+        pub const KEYBOARD_INTERRUPT = 1;
 
-        return .{
-            // Initialize ram to 0
-            .memory = [_]u8{0} ** 256,
-            .registers = registers,
-            .program_counter = 0,
-            .instruction_register = 0,
-            .memory_address_register = 0,
-            .memory_data_register = 0,
-            .flags = .{
-                .less_than = false,
-                .greater_than = false,
-                .equal = false,
-            },
-            .interrupts_enabled = true,
-            .last_timer_interrupt = undefined,
-        };
-    }
+        pub fn init(input: R, output: W) @This() {
+            var registers = [_]u8{0} ** 8;
+            registers[SP] = STACK_INIT;
 
-    pub fn push_stack(this: *@This(), value: u8) void {
-        this.registers[SP] -%= 1;
-        this.memory[this.registers[SP]] = value;
-    }
+            return .{
+                .input = input,
+                .output = output,
+                // Initialize ram to 0
+                .memory = [_]u8{0} ** 256,
+                .registers = registers,
+                .program_counter = 0,
+                .instruction_register = 0,
+                .memory_address_register = 0,
+                .memory_data_register = 0,
+                .flags = .{
+                    .less_than = false,
+                    .greater_than = false,
+                    .equal = false,
+                },
+                .interrupts_enabled = true,
+                .last_timer_interrupt = undefined,
+                .halted = false,
+            };
+        }
 
-    pub fn pop_stack(this: *@This()) u8 {
-        defer this.registers[SP] +%= 1;
-        return this.memory[this.registers[SP]];
-    }
+        pub fn push_stack(this: *@This(), value: u8) void {
+            this.registers[SP] -%= 1;
+            this.memory[this.registers[SP]] = value;
+        }
 
-    pub fn interrupt(this: *@This(), num: u3) void {
-        if (!this.interrupts_enabled) return;
-        const check_mask = @as(u8, 1) << num;
-        if (check_mask & this.registers[IM] == check_mask) {
-            this.interrupts_enabled = false;
+        pub fn pop_stack(this: *@This()) u8 {
+            defer this.registers[SP] +%= 1;
+            return this.memory[this.registers[SP]];
+        }
+
+        pub fn interrupt(this: *@This(), num: u3) void {
+            if (!this.interrupts_enabled) return;
+            const check_mask = @as(u8, 1) << num;
+            if (check_mask & this.registers[IM] == check_mask) {
+                this.interrupts_enabled = false;
+
+                // Clear every status bit except for the one being called
+                this.registers[IS] = 0;
+                this.registers[IS] |= check_mask;
+
+                this.push_stack(this.program_counter);
+                this.push_stack(@bitCast(u3, this.flags));
+                this.push_stack(this.registers[0]);
+                this.push_stack(this.registers[1]);
+                this.push_stack(this.registers[2]);
+                this.push_stack(this.registers[3]);
+                this.push_stack(this.registers[4]);
+                this.push_stack(this.registers[5]);
+                this.push_stack(this.registers[6]);
+
+                const handler_address = this.memory[INTERRUPT_VECTORS_BASE + @as(u8, num)];
+                this.program_counter = handler_address;
+            }
+        }
+
+        pub fn interrupt_return(this: *@This()) !void {
+            // If interrupts_enabled is true, IRET was called outside of an Interrupt
+            if (this.interrupts_enabled) return error.InterruptReturnOutsideInterrupt;
 
             // Clear every status bit except for the one being called
             this.registers[IS] = 0;
-            this.registers[IS] |= check_mask;
 
-            this.push_stack(this.program_counter);
-            this.push_stack(@bitCast(u3, this.flags));
-            this.push_stack(this.registers[0]);
-            this.push_stack(this.registers[1]);
-            this.push_stack(this.registers[2]);
-            this.push_stack(this.registers[3]);
-            this.push_stack(this.registers[4]);
-            this.push_stack(this.registers[5]);
-            this.push_stack(this.registers[6]);
+            this.registers[6] = this.pop_stack();
+            this.registers[5] = this.pop_stack();
+            this.registers[4] = this.pop_stack();
+            this.registers[3] = this.pop_stack();
+            this.registers[2] = this.pop_stack();
+            this.registers[1] = this.pop_stack();
+            this.registers[0] = this.pop_stack();
 
-            const handler_address = this.memory[INTERRUPT_VECTORS_BASE + @as(u8, num)];
-            this.program_counter = handler_address;
+            const flag_val = this.pop_stack();
+            if (flag_val & 0b00000111 != flag_val) {
+                return error.InterruptReturnInvalidFlagsValue;
+            }
+            this.flags = @bitCast(@TypeOf(this.flags), @intCast(u3, flag_val));
+
+            this.program_counter = this.pop_stack();
+
+            this.interrupts_enabled = true;
         }
-    }
 
-    pub fn interrupt_return(this: *@This()) !void {
-        // If interrupts_enabled is true, IRET was called outside of an Interrupt
-        if (this.interrupts_enabled) return error.InterruptReturnOutsideInterrupt;
+        pub fn run(this: *@This()) !void {
+            this.last_timer_interrupt = try std.time.Timer.start();
 
-        // Clear every status bit except for the one being called
-        this.registers[IS] = 0;
-
-        this.registers[6] = this.pop_stack();
-        this.registers[5] = this.pop_stack();
-        this.registers[4] = this.pop_stack();
-        this.registers[3] = this.pop_stack();
-        this.registers[2] = this.pop_stack();
-        this.registers[1] = this.pop_stack();
-        this.registers[0] = this.pop_stack();
-
-        const flag_val = this.pop_stack();
-        if (flag_val & 0b00000111 != flag_val) {
-            return error.InterruptReturnInvalidFlagsValue;
+            while (!this.halted) {
+                try this.step();
+            }
         }
-        this.flags = @bitCast(@TypeOf(this.flags), @intCast(u3, flag_val));
 
-        this.program_counter = this.pop_stack();
-
-        this.interrupts_enabled = true;
-    }
-
-    pub fn run(this: *@This()) !void {
-        const stdout = std.io.getStdOut().writer();
-        this.last_timer_interrupt = try std.time.Timer.start();
-
-        var stdin_file = std.io.getStdIn();
-        if (builtin.os.tag == .linux) {
-            const flags = try std.os.fcntl(stdin_file.handle, std.os.F_GETFL, 0);
-            _ = try std.os.fcntl(stdin_file.handle, std.os.F_SETFL, flags | std.os.O_NONBLOCK);
-        }
-        const stdin = stdin_file.reader();
-
-        while (true) {
+        pub fn step(this: *@This()) !void {
             // Check timer interrupt
             if (this.interrupts_enabled) {
                 if (this.last_timer_interrupt.read() >= 1 * std.time.ns_per_s) {
                     this.last_timer_interrupt.reset();
                     this.interrupt(TIMER_INTERRUPT);
                 }
-                if (stdin.readByte()) |byte| {
+                if (this.input.readByte()) |byte| {
                     this.memory[MEM_ADDR_KEY_PRESSED] = byte;
                     this.interrupt(KEYBOARD_INTERRUPT);
-                } else |err| {
-                    if (err != error.WouldBlock)
-                        return err;
+                } else |err| switch (err) {
+                    error.WouldBlock, error.EndOfStream => {},
+                    else => |e| return e,
                 }
             }
 
@@ -173,7 +178,7 @@ pub const Cpu = struct {
             var did_not_jump = false;
             switch (instruction) {
                 .NOP => {},
-                .HLT => break,
+                .HLT => this.halted = true,
                 .ADD => {
                     const a = this.memory[this.program_counter + 1];
                     const b = this.memory[this.program_counter + 2];
@@ -262,12 +267,12 @@ pub const Cpu = struct {
                 .PRN => {
                     const register = this.memory[this.program_counter + 1];
                     const value = this.registers[register];
-                    try stdout.print("{}", .{value});
+                    try this.output.print("{}", .{value});
                 },
                 .PRA => {
                     const register = this.memory[this.program_counter + 1];
                     const value = this.registers[register];
-                    _ = try stdout.write(&[_]u8{value});
+                    _ = try this.output.write(&[_]u8{value});
                 },
                 .PUSH => {
                     const register = this.memory[this.program_counter + 1];
@@ -344,5 +349,5 @@ pub const Cpu = struct {
                 this.program_counter +%= instruction.number_operands() + 1;
             }
         }
-    }
-};
+    };
+}

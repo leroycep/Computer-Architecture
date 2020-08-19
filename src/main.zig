@@ -1,8 +1,12 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const assembler = @import("./asm.zig");
 const emulator = @import("./cpu.zig");
 
 const MAX_FILE_SIZE = 1024 * 1024 * 1024;
+const VTIME = 5;
+const VMIN = 6;
+
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -34,8 +38,40 @@ pub fn main() !void {
     };
     defer allocator.free(program_bytes);
 
+    // Set up stdin to make input nonblocking
+    var stdin_file = std.io.getStdIn();
+    if (builtin.os.tag == .linux) {
+        const flags = try std.os.fcntl(stdin_file.handle, std.os.F_GETFL, 0);
+        _ = try std.os.fcntl(stdin_file.handle, std.os.F_SETFL, flags | std.os.O_NONBLOCK);
+    }
+
+    // Set up terminal to input every key
+    const original_term_attr = set_up_term: {
+        if (builtin.os.tag != .linux) break :set_up_term null;
+        if (!std.os.isatty(stdin_file.handle)) break :set_up_term null;
+
+        const original_term_attr = try std.os.tcgetattr(stdin_file.handle);
+
+        var new_term_attr = original_term_attr;
+        new_term_attr.lflag &= ~(@as(c_uint, std.os.ECHO) | std.os.ICANON);
+        new_term_attr.cc[VTIME] = 0;
+        new_term_attr.cc[VMIN] = 0;
+        try std.os.tcsetattr(stdin_file.handle, .NOW, new_term_attr);
+
+        break :set_up_term original_term_attr;
+    };
+    defer {
+        if (original_term_attr) |attr| {
+            std.os.tcsetattr(stdin_file.handle, .NOW, attr) catch {};
+        }
+    }
+
+    const stdin = stdin_file.reader();
+
+    const stdout = std.io.getStdOut().writer();
+
     // Initialize CPU
-    var cpu = emulator.Cpu.init();
+    var cpu = emulator.Cpu(@TypeOf(stdin), @TypeOf(stdout)).init(stdin, stdout);
 
     // Load program into memory
     std.mem.copy(u8, &cpu.memory, program_bytes);
