@@ -7,7 +7,6 @@ const MAX_FILE_SIZE = 1024 * 1024 * 1024;
 const VTIME = 5;
 const VMIN = 6;
 
-
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.debug.assert(!gpa.deinit());
@@ -76,5 +75,25 @@ pub fn main() !void {
     // Load program into memory
     std.mem.copy(u8, &cpu.memory, program_bytes);
 
-    try cpu.run();
+    const MAX_DELTA_SECONDS: f64 = 0.25;
+    var prev_time = std.time.milliTimestamp();
+    var accumulator: f64 = 0.0;
+
+    while (!cpu.halted) {
+        const tick_delta_seconds: f64 = 1.0 / @intToFloat(f64, cpu.frequency);
+        const current_time = std.time.milliTimestamp();
+
+        var delta = @intToFloat(f64, current_time - prev_time) / 1000;
+        if (delta > MAX_DELTA_SECONDS) {
+            delta = MAX_DELTA_SECONDS;
+        }
+        prev_time = current_time;
+
+        accumulator += delta;
+
+        while (accumulator >= tick_delta_seconds) {
+            try cpu.step();
+            accumulator -= tick_delta_seconds;
+        }
+    }
 }

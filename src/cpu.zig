@@ -2,6 +2,8 @@ const std = @import("std");
 const builtin = @import("builtin");
 const Instruction = @import("./instruction.zig").Instruction;
 
+const DEFAULT_FREQUENCY = 1000000;
+
 pub fn Cpu(comptime R: type, comptime W: type) type {
     return struct {
         input: R,
@@ -30,7 +32,9 @@ pub fn Cpu(comptime R: type, comptime W: type) type {
 
         interrupts_enabled: bool,
 
-        last_timer_interrupt: std.time.Timer,
+        last_timer_interrupt: usize,
+        cycles: usize,
+        frequency: usize,
 
         halted: bool,
 
@@ -78,7 +82,9 @@ pub fn Cpu(comptime R: type, comptime W: type) type {
                     .equal = false,
                 },
                 .interrupts_enabled = true,
-                .last_timer_interrupt = undefined,
+                .last_timer_interrupt = 0,
+                .cycles = 0,
+                .frequency = DEFAULT_FREQUENCY,
                 .halted = false,
             };
         }
@@ -104,7 +110,8 @@ pub fn Cpu(comptime R: type, comptime W: type) type {
                 this.registers[IS] |= check_mask;
 
                 this.push_stack(this.program_counter);
-                this.push_stack(@bitCast(u3, this.flags));
+                const flags_val = @intCast(u8, @bitCast(u3, this.flags));
+                this.push_stack(@as(u8, 0b00000111) & flags_val);
                 this.push_stack(this.registers[0]);
                 this.push_stack(this.registers[1]);
                 this.push_stack(this.registers[2]);
@@ -135,6 +142,7 @@ pub fn Cpu(comptime R: type, comptime W: type) type {
 
             const flag_val = this.pop_stack();
             if (flag_val & 0b00000111 != flag_val) {
+                std.log.err(.LS8, "interrupt return invalid flags value: {b:0>8}", .{flag_val});
                 return error.InterruptReturnInvalidFlagsValue;
             }
             this.flags = @bitCast(@TypeOf(this.flags), @intCast(u3, flag_val));
@@ -144,19 +152,12 @@ pub fn Cpu(comptime R: type, comptime W: type) type {
             this.interrupts_enabled = true;
         }
 
-        pub fn run(this: *@This()) !void {
-            this.last_timer_interrupt = try std.time.Timer.start();
-
-            while (!this.halted) {
-                try this.step();
-            }
-        }
-
         pub fn step(this: *@This()) !void {
+            defer this.cycles += 1;
             // Check timer interrupt
             if (this.interrupts_enabled) {
-                if (this.last_timer_interrupt.read() >= 1 * std.time.ns_per_s) {
-                    this.last_timer_interrupt.reset();
+                if (this.cycles >= this.last_timer_interrupt +% this.frequency) {
+                    this.last_timer_interrupt = this.cycles;
                     this.interrupt(TIMER_INTERRUPT);
                 }
                 if (this.input.readByte()) |byte| {

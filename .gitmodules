@@ -1,0 +1,3 @@
+[submodule "zee_alloc"]
+	path = zee_alloc
+	url = https://github.com/leroycep/zee_alloc.git
