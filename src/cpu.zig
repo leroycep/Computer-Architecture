@@ -480,6 +480,7 @@ pub const Instruction = enum(u8) {
             @enumToInt(@This().JMP) => .JMP,
             @enumToInt(@This().JEQ) => .JEQ,
             @enumToInt(@This().JNE) => .JNE,
+            @enumToInt(@This().JGT) => .JGT,
             @enumToInt(@This().ST) => .ST,
             @enumToInt(@This().LD) => .LD,
             @enumToInt(@This().LDI) => .LDI,
