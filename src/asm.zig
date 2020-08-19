@@ -1,5 +1,5 @@
 const std = @import("std");
-const cpu = @import("./cpu.zig");
+const Instruction = @import("./instruction.zig").Instruction;
 
 pub fn translate(allocator: *std.mem.Allocator, text: []const u8) ![]const u8 {
     var code = std.ArrayList(u8).init(allocator);
@@ -91,7 +91,7 @@ const Line = struct {
 };
 
 const InstructionLine = struct {
-    instruction: ?cpu.Instruction = null,
+    instruction: ?Instruction = null,
     op_a: ?Param = null,
     op_b: ?Param = null,
 };
@@ -125,7 +125,7 @@ fn parse_line(text: []const u8) !Line {
 
                 return line;
             } else {
-                instruction_line.instruction = cpu.Instruction.parse(part) orelse {
+                instruction_line.instruction = Instruction.parse(part) orelse {
                     std.log.err(.ASM, "Unexpected symbol: '{}'", .{part});
                     return error.ExpectedInstructionName;
                 };
@@ -141,7 +141,7 @@ fn parse_line(text: []const u8) !Line {
 
                 return line;
             } else {
-                instruction_line.instruction = cpu.Instruction.parse(part) orelse {
+                instruction_line.instruction = Instruction.parse(part) orelse {
                     std.log.err(.ASM, "Unexpected symbol: '{}'", .{part});
                     return error.ExpectedInstructionName;
                 };
