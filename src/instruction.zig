@@ -103,6 +103,12 @@ pub const Instruction = enum(u8) {
     /// Print the register as a number
     PRN = 0b01000111,
 
+    pub const OperandType = enum {
+        None,
+        Immediate,
+        Register,
+    };
+
     pub fn number_operands(this: @This()) u2 {
         const val = @enumToInt(this);
         return @intCast(u2, (0b11000000 & val) >> 6);
@@ -116,6 +122,45 @@ pub const Instruction = enum(u8) {
     pub fn sets_program_counter(this: @This()) bool {
         const val = @enumToInt(this);
         return (0b00010000 & val) != 0;
+    }
+
+    pub fn operand_types(this: @This()) [2]OperandType {
+        return switch (this) {
+            .NOP => .{ .None, .None },
+            .HLT => .{ .None, .None },
+            .ADD => .{ .Register, .Register },
+            .SUB => .{ .Register, .Register },
+            .DIV => .{ .Register, .Register },
+            .MUL => .{ .Register, .Register },
+            .MOD => .{ .Register, .Register },
+            .AND => .{ .Register, .Register },
+            .NOT => .{ .Register, .None },
+            .OR => .{ .Register, .Register },
+            .XOR => .{ .Register, .Register },
+            .SHL => .{ .Register, .Register },
+            .SHR => .{ .Register, .Register },
+            .CALL => .{ .Register, .None },
+            .RET => .{ .None, .None },
+            .POP => .{ .Register, .None },
+            .PUSH => .{ .Register, .None },
+            .JMP => .{ .Register, .None },
+            .CMP => .{ .Register, .Register },
+            .JEQ => .{ .Register, .None },
+            .JNE => .{ .Register, .None },
+            .JGE => .{ .Register, .None },
+            .JGT => .{ .Register, .None },
+            .JLE => .{ .Register, .None },
+            .JLT => .{ .Register, .None },
+            .LD => .{ .Register, .Register },
+            .ST => .{ .Register, .Register },
+            .LDI => .{ .Register, .Immediate },
+            .DEC => .{ .Register, .None },
+            .INC => .{ .Register, .None },
+            .INT => .{ .Register, .None },
+            .IRET => .{ .None, .None },
+            .PRA => .{ .Register, .None },
+            .PRN => .{ .Register, .None },
+        };
     }
 
     pub fn decode(val: u8) !@This() {

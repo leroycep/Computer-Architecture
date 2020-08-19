@@ -12,8 +12,10 @@ pub fn translate(allocator: *std.mem.Allocator, text: []const u8) ![]const u8 {
     var to_replace_with_symbol = std.ArrayList(struct { symbol: []const u8, address: u8 }).init(allocator);
     defer to_replace_with_symbol.deinit();
 
+    var was_error = false;
+
     var line_iterator = std.mem.tokenize(text, "\n\r");
-    var line_number: usize = 0;
+    var line_number: usize = 1;
     while (line_iterator.next()) |line_text| : (line_number += 1) {
         const line = try parse_line(line_text);
         if (line.label) |label| {
@@ -30,6 +32,18 @@ pub fn translate(allocator: *std.mem.Allocator, text: []const u8) ![]const u8 {
             .Instruction => |i| {
                 if (i.instruction) |instruction| {
                     try code.append(@enumToInt(instruction));
+
+                    const expected_operands = instruction.operand_types();
+
+                    if (!Param.matches_expected(i.op_a, expected_operands[0])) {
+                        std.log.err(.ASM, "Unexpected operand {} on line {}; expected {}", .{ i.op_a, line_number, expected_operands[0] });
+                        was_error = true;
+                    }
+                    if (!Param.matches_expected(i.op_b, expected_operands[1])) {
+                        std.log.err(.ASM, "Unexpected operand {} on line {}; expected {}", .{ i.op_a, line_number, expected_operands[0] });
+                        was_error = true;
+                    }
+
                     if (instruction.number_operands() >= 1) {
                         const a = i.op_a orelse {
                             std.log.err(.ASM, "{} requires another parameter line {}", .{ instruction, line_number });
@@ -74,8 +88,12 @@ pub fn translate(allocator: *std.mem.Allocator, text: []const u8) ![]const u8 {
             code.items[replace_with_symbol.address] = symbol_address;
         } else {
             std.log.err(.ASM, "Symbol not found: {}", .{replace_with_symbol.symbol});
-            return error.SymbolNotFound;
+            was_error = true;
         }
+    }
+
+    if (was_error) {
+        return error.InvalidAssembly;
     }
 
     return code.toOwnedSlice();
@@ -100,6 +118,17 @@ const Param = union(enum) {
     Symbol: []const u8,
     Register: u3,
     Byte: u8,
+
+    fn matches_expected(this: ?@This(), expected: Instruction.OperandType) bool {
+        if (this == null) {
+            return expected == .None;
+        }
+        return switch (this.?) {
+            .Symbol => expected == .Immediate,
+            .Register => expected == .Register,
+            .Byte => expected == .Immediate,
+        };
+    }
 };
 
 fn parse_line(text: []const u8) !Line {

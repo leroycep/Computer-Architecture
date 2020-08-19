@@ -10,7 +10,7 @@ pub fn main() !void {
     const allocator = &gpa.allocator;
 
     if (std.os.argv.len != 2) {
-        std.log.err(.LS8ToBin, "Incorrect usage. Correct usage:\n\n\t{} ./<filename>.asm", .{std.os.argv[0]});
+        std.log.err(.LS8, "Incorrect usage. Correct usage:\n\n\t{} ./<filename>.asm", .{std.os.argv[0]});
         std.os.exit(1);
     }
 
@@ -25,7 +25,12 @@ pub fn main() !void {
         defer allocator.free(contents);
 
         // Convert the LS8 text into actually binary LS8
-        break :assemble_program try assembler.translate(allocator, contents);
+        if (assembler.translate(allocator, contents)) |bytes| {
+            break :assemble_program bytes;
+        } else |err| {
+            std.log.err(.LS8, "Failed to translate assembly: {}", .{err});
+            std.os.exit(1);
+        }
     };
     defer allocator.free(program_bytes);
 
