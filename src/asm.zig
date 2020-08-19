@@ -16,18 +16,18 @@ pub fn translate(allocator: *std.mem.Allocator, text: []const u8) ![]const u8 {
     var line_number: usize = 0;
     while (line_iterator.next()) |line_text| : (line_number += 1) {
         const line = try parse_line(line_text);
-        switch (line) {
+        if (line.label) |label| {
+            const gop = try symbols.getOrPut(label);
+            if (gop.found_existing) {
+                std.log.err(.ASM, "Duplicate symbol \"{}\" on line {}", .{ label, line_number });
+                return error.DuplicateSymbol;
+            }
+            gop.entry.value = @intCast(u8, code.items.len);
+        }
+        switch (line.data) {
             .Byte => |b| try code.append(b),
             .Data => |d| try code.appendSlice(d),
             .Instruction => |i| {
-                if (i.label) |label| {
-                    const gop = try symbols.getOrPut(label);
-                    if (gop.found_existing) {
-                        std.log.err(.ASM, "Duplicate symbol \"{}\" on line {}", .{ label, line_number });
-                        return error.DuplicateSymbol;
-                    }
-                    gop.entry.value = @intCast(u8, code.items.len);
-                }
                 if (i.instruction) |instruction| {
                     try code.append(@enumToInt(instruction));
                     if (instruction.number_operands() >= 1) {
@@ -81,14 +81,16 @@ pub fn translate(allocator: *std.mem.Allocator, text: []const u8) ![]const u8 {
     return code.toOwnedSlice();
 }
 
-const Line = union(enum) {
-    Instruction: InstructionLine,
-    Data: []const u8,
-    Byte: u8,
+const Line = struct {
+    label: ?[]const u8 = null,
+    data: union(enum) {
+        Instruction: InstructionLine,
+        Data: []const u8,
+        Byte: u8,
+    },
 };
 
 const InstructionLine = struct {
-    label: ?[]const u8 = null,
     instruction: ?cpu.Instruction = null,
     op_a: ?Param = null,
     op_b: ?Param = null,
@@ -103,7 +105,8 @@ const Param = union(enum) {
 fn parse_line(text: []const u8) !Line {
     var comment_start = std.mem.indexOfAny(u8, text, ";#") orelse text.len;
     var parts = std.mem.tokenize(text[0..comment_start], " \t,");
-    var line = InstructionLine{};
+    var line: Line = undefined;
+    var instruction_line = InstructionLine{};
 
     var state: u8 = 0;
     while (parts.next()) |part| {
@@ -113,34 +116,43 @@ fn parse_line(text: []const u8) !Line {
                 line.label = part[0..first_colon];
                 state = 1;
             } else if (std.ascii.eqlIgnoreCase(part, "ds")) {
-                const data = parts.rest();
-                return Line{ .Data = data };
+                line.data = .{ .Data = parts.rest() };
+                return line;
             } else if (std.ascii.eqlIgnoreCase(part, "db")) {
                 const data = std.fmt.trim(parts.rest());
 
-                const byte = try parse_int_literal(data);
+                line.data = .{ .Byte = try parse_int_literal(data) };
 
-                return Line{ .Byte = byte };
+                return line;
             } else {
-                line.instruction = cpu.Instruction.parse(part) orelse {
+                instruction_line.instruction = cpu.Instruction.parse(part) orelse {
                     std.log.err(.ASM, "Unexpected symbol: '{}'", .{part});
                     return error.ExpectedInstructionName;
                 };
                 state = 2;
             },
-            1 => {
-                line.instruction = cpu.Instruction.parse(part) orelse {
+            1 => if (std.ascii.eqlIgnoreCase(part, "ds")) {
+                line.data = .{ .Data = parts.rest() };
+                return line;
+            } else if (std.ascii.eqlIgnoreCase(part, "db")) {
+                const data = std.fmt.trim(parts.rest());
+
+                line.data = .{ .Byte = try parse_int_literal(data) };
+
+                return line;
+            } else {
+                instruction_line.instruction = cpu.Instruction.parse(part) orelse {
                     std.log.err(.ASM, "Unexpected symbol: '{}'", .{part});
                     return error.ExpectedInstructionName;
                 };
                 state = 2;
             },
             2 => {
-                line.op_a = try parse_param(part);
+                instruction_line.op_a = try parse_param(part);
                 state = 3;
             },
             3 => {
-                line.op_b = try parse_param(part);
+                instruction_line.op_b = try parse_param(part);
                 state = 4;
             },
             else => {
@@ -150,7 +162,8 @@ fn parse_line(text: []const u8) !Line {
         }
     }
 
-    return Line{ .Instruction = line };
+    line.data = .{ .Instruction = instruction_line };
+    return line;
 }
 
 fn parse_param(text: []const u8) !Param {
