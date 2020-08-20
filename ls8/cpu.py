@@ -77,14 +77,14 @@ class CPU:
         self.instruction_table[JGT] = self.unimplemented_op
         self.instruction_table[JLE] = self.unimplemented_op
         self.instruction_table[JLT] = self.unimplemented_op
-        self.instruction_table[LD] = self.unimplemented_op
+        self.instruction_table[LD] = self.op_ld
         self.instruction_table[ST] = self.unimplemented_op
         self.instruction_table[LDI] = self.op_ldi
-        self.instruction_table[DEC] = self.unimplemented_op
-        self.instruction_table[INC] = self.unimplemented_op
+        self.instruction_table[DEC] = self.op_dec
+        self.instruction_table[INC] = self.op_inc
         self.instruction_table[INT] = self.unimplemented_op
         self.instruction_table[IRET] = self.unimplemented_op
-        self.instruction_table[PRA] = self.unimplemented_op
+        self.instruction_table[PRA] = self.op_pra
         self.instruction_table[PRN] = self.op_prn
 
     def load(self, filepath):
@@ -167,14 +167,26 @@ class CPU:
     def op_ldi(self, op, reg_a, reg_b):
         self.reg[reg_a] = reg_b
 
+    def op_ld(self, op, reg_a, reg_b):
+        self.reg[reg_a] = self.ram[self.reg[reg_b]]
+
     def op_add(self, op, reg_a, reg_b):
         self.reg[reg_a] += self.reg[reg_b]
 
     def op_mul(self, op, reg_a, reg_b):
         self.reg[reg_a] *= self.reg[reg_b]
 
+    def op_inc(self, op, reg_a, reg_b):
+        self.reg[reg_a] += 1
+
+    def op_dec(self, op, reg_a, reg_b):
+        self.reg[reg_a] -= 1
+
     def op_prn(self, op, reg_a, reg_b):
         print(f"{self.reg[reg_a]:d}", end="")
+
+    def op_pra(self, op, reg_a, reg_b):
+        print(f"{self.reg[reg_a]:c}", end="")
 
     def op_nop(self, op, reg_a, reg_b):
         pass
