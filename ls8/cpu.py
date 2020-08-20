@@ -64,8 +64,8 @@ class CPU:
         self.instruction_table[XOR] = self.unimplemented_op
         self.instruction_table[SHL] = self.unimplemented_op
         self.instruction_table[SHR] = self.unimplemented_op
-        self.instruction_table[CALL] = self.unimplemented_op
-        self.instruction_table[RET] = self.unimplemented_op
+        self.instruction_table[CALL] = self.op_call
+        self.instruction_table[RET] = self.op_ret
         self.instruction_table[POP] = self.op_pop
         self.instruction_table[PUSH] = self.op_push
         self.instruction_table[JMP] = self.unimplemented_op
@@ -186,3 +186,12 @@ class CPU:
 
     def op_pop(self, op, reg_a, reg_b):
         self.reg[reg_a] = self.pop_stack()
+
+    def op_call(self, op, reg_a, reg_b):
+        return_address = self.pc + 2
+        self.push_stack(return_address)
+
+        self.pc = self.reg[reg_a]
+
+    def op_ret(self, op, reg_a, reg_b):
+        self.pc = self.pop_stack()
