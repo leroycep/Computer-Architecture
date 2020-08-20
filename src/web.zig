@@ -42,7 +42,7 @@ pub fn panic(format: []const u8, stacktrace: ?*std.builtin.StackTrace) noreturn 
 
 // Global state
 const allocator = zee_alloc.ZeeAllocDefaults.wasm_allocator;
-var cpu: emulator.Cpu(WebReader, WebBuffer.Writer) = undefined;
+var cpu: emulator.Cpu(KeyboardInput.Reader, WebBuffer.Writer) = undefined;
 const MAX_DELTA_SECONDS: f64 = 0.25;
 var prev_time: f64 = undefined;
 var accumulator: f64 = 0.0;
@@ -52,10 +52,11 @@ pub export fn init() void {
 }
 
 pub export fn reset() void {
+    const keyboard_input = KeyboardInput{};
     const output_buffer = WebBuffer{
         .buffer_id = get_output_buffer(),
     };
-    cpu = emulator.Cpu(WebReader, WebBuffer.Writer).init(WebReader{}, output_buffer.writer());
+    cpu = emulator.Cpu(KeyboardInput.Reader, WebBuffer.Writer).init(keyboard_input.reader(), output_buffer.writer());
     prev_time = get_time_seconds();
     accumulator = 0;
 }
@@ -106,9 +107,26 @@ pub export fn stepMany() bool {
     return !cpu.halted;
 }
 
-const WebReader = struct {
-    pub fn readByte(this: *@This()) error{ WouldBlock, EndOfStream }!u8 {
-        return error.WouldBlock;
+const KeyboardInput = struct {
+    extern fn keyboard_input_empty() bool;
+    extern fn keyboard_input_read_byte() u8;
+
+    pub const Error = error{ WouldBlock, EndOfStream };
+    pub const Reader = std.io.Reader(@This(), Error, read);
+
+    pub fn read(this: @This(), buf: []u8) Error!usize {
+        if (keyboard_input_empty()) {
+            return error.WouldBlock;
+        }
+        var idx: usize = 0;
+        while (!keyboard_input_empty() and idx < buf.len) : (idx += 1) {
+            buf[idx] = keyboard_input_read_byte();
+        }
+        return idx;
+    }
+
+    pub fn reader(this: @This()) Reader {
+        return Reader{ .context = this };
     }
 };
 
