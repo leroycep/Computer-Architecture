@@ -37,6 +37,8 @@ IRET = 0b00010011
 PRA = 0b01001000
 PRN = 0b01000111
 
+SP = 7
+
 
 class CPU:
     """Main CPU class."""
@@ -64,8 +66,8 @@ class CPU:
         self.instruction_table[SHR] = self.unimplemented_op
         self.instruction_table[CALL] = self.unimplemented_op
         self.instruction_table[RET] = self.unimplemented_op
-        self.instruction_table[POP] = self.unimplemented_op
-        self.instruction_table[PUSH] = self.unimplemented_op
+        self.instruction_table[POP] = self.op_pop
+        self.instruction_table[PUSH] = self.op_push
         self.instruction_table[JMP] = self.unimplemented_op
         self.instruction_table[CMP] = self.unimplemented_op
         self.instruction_table[JEQ] = self.unimplemented_op
@@ -126,6 +128,15 @@ class CPU:
 
         print()
 
+    def push_stack(self, val):
+        self.reg[SP] -= 1
+        self.ram[self.reg[SP]] = val
+
+    def pop_stack(self):
+        val = self.ram[self.reg[SP]]
+        self.reg[SP] += 1
+        return val
+
     def run(self):
         """Run the CPU."""
         while self.running:
@@ -169,3 +180,9 @@ class CPU:
 
     def op_hlt(self, op, reg_a, reg_b):
         self.running = False
+
+    def op_push(self, op, reg_a, reg_b):
+        self.push_stack(self.reg[reg_a])
+
+    def op_pop(self, op, reg_a, reg_b):
+        self.reg[reg_a] = self.pop_stack()
