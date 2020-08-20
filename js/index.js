@@ -4,6 +4,8 @@ let editor = ace.edit("editor");
 editor.setTheme("ace/theme/monokai");
 editor.session.setMode("ace/mode/AssemblyLS8");
 
+const WASM_PATH = "../ls8-web.wasm";
+
 var instance = null;
 
 let utf8_text_encoder = new TextEncoder();
@@ -45,7 +47,7 @@ const env = {
   get_time_seconds: () => new Date().getTime(),
 };
 
-WebAssembly.instantiateStreaming(fetch("/ls8-web.wasm"), { env }).then(
+WebAssembly.instantiateStreaming(fetch(WASM_PATH), { env }).then(
   (obj) => {
     instance = obj.instance;
     instance.exports.init();
