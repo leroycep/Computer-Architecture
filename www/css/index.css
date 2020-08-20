@@ -1,7 +1,33 @@
-#editor { 
-    position: absolute;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    left: 0;
+content {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    grid-template-areas:
+        "editor buttons"
+        "editor output";
 }
+
+#editor { 
+    grid-area: editor;
+    width: 100%;
+    min-height: 480px;
+}
+
+#buttons {
+    grid-area: buttons;
+}
+
+#buttons button {
+    width: 100%;
+}
+
+.output {
+    grid-area: output;
+    background-color: lightgrey;
+    padding: 0 2%;
+}
+
+.output pre {
+    height: 80%;
+}
+

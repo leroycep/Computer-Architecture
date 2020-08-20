@@ -45,7 +45,7 @@ ace.define(
           {
             token: "keyword.control.assembly",
             regex:
-              "\\b(?:add|and|cmp|dec|div|int|iret|xor|hlt|nop|ret|call|j(?:mp|n?e|ge?|ae?|le?|be?|n?o|n?z))\\b",
+              "\\b(?:NOP|HLT|ADD|SUB|DIV|MUL|MOD|AND|NOT|OR|XOR|SHL|SHR|CALL|RET|POP|PUSH|JMP|CMP|JEQ|JNE|JGE|JGT|JLE|JLT|LD|ST|LDI|DEC|INC|INT|IRET|PRA|PRN)\\b",
             caseInsensitive: true,
           },
           {

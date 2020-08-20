@@ -91,7 +91,7 @@ pub fn main() !void {
 
         accumulator += delta;
 
-        while (accumulator >= tick_delta_seconds) {
+        while (!cpu.halted and accumulator >= tick_delta_seconds) {
             try cpu.step();
             accumulator -= tick_delta_seconds;
         }

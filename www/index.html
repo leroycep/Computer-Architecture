@@ -12,7 +12,23 @@
   </head>
 
   <body>
-    <div id="editor"></div>
+    <content>
+      <div id="editor"># print8.asm
+#
+# Expected output: 8
+
+LDI R0,8
+PRN R0
+HLT
+</div>
+      <div id="buttons">
+          <button id="run_stop_button">Run</button>
+      </div>
+      <div class="output">
+          <h3>Output</h3>
+          <pre id="output"></pre>
+      </div>
+    </content>
 
     <script
       src="https://pagecdn.io/lib/ace/1.4.12/ace.min.js"
