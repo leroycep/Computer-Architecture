@@ -21,13 +21,27 @@ content {
     width: 100%;
 }
 
+/*
+--black: #000000ff;
+--charcoal: #2f4550ff;
+--dark-electric-blue: #586f7cff;
+--powder-blue: #b8dbd9ff;
+--ghost-white: #f4f4f9ff;*/
+
 .output {
+    display: flex;
+    flex-direction: column;
     grid-area: output;
-    background-color: lightgrey;
+    background-color: #f4f4f9ff;
     padding: 0 2%;
 }
 
 .output pre {
-    height: 80%;
+    background-color: #ADADAD;
+    flex-grow: 1;
+}
+
+.output pre:focus {
+    background-color: #CCCCCC;
 }
 
