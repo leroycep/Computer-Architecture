@@ -4,7 +4,7 @@ let editor = ace.edit("editor");
 editor.setTheme("ace/theme/monokai");
 editor.session.setMode("ace/mode/AssemblyLS8");
 
-const WASM_PATH = "../ls8-web.wasm";
+const WASM_PATH = "./ls8-web.wasm";
 
 var instance = null;
 
