@@ -1,5 +1,6 @@
 const std = @import("std");
 const Instruction = @import("./instruction.zig").Instruction;
+const log = std.log.scoped(.assmbler);
 
 pub fn translate(allocator: *std.mem.Allocator, text: []const u8) ![]const u8 {
     var code = std.ArrayList(u8).init(allocator);
@@ -21,7 +22,7 @@ pub fn translate(allocator: *std.mem.Allocator, text: []const u8) ![]const u8 {
         if (line.label) |label| {
             const gop = try symbols.getOrPut(label);
             if (gop.found_existing) {
-                std.log.err(.ASM, "Duplicate symbol \"{}\" on line {}", .{ label, line_number });
+                log.err("Duplicate symbol \"{}\" on line {}", .{ label, line_number });
                 return error.DuplicateSymbol;
             }
             gop.entry.value = @intCast(u8, code.items.len);
@@ -36,17 +37,17 @@ pub fn translate(allocator: *std.mem.Allocator, text: []const u8) ![]const u8 {
                     const expected_operands = instruction.operand_types();
 
                     if (!Param.matches_expected(i.op_a, expected_operands[0])) {
-                        std.log.err(.ASM, "Unexpected operand {} on line {}; expected {}", .{ i.op_a, line_number, expected_operands[0] });
+                        log.err("Unexpected operand {} on line {}; expected {}", .{ i.op_a, line_number, expected_operands[0] });
                         was_error = true;
                     }
                     if (!Param.matches_expected(i.op_b, expected_operands[1])) {
-                        std.log.err(.ASM, "Unexpected operand {} on line {}; expected {}", .{ i.op_a, line_number, expected_operands[0] });
+                        log.err("Unexpected operand {} on line {}; expected {}", .{ i.op_a, line_number, expected_operands[0] });
                         was_error = true;
                     }
 
                     if (instruction.number_operands() >= 1) {
                         const a = i.op_a orelse {
-                            std.log.err(.ASM, "{} requires another parameter line {}", .{ instruction, line_number });
+                            log.err("{} requires another parameter line {}", .{ instruction, line_number });
                             return error.NotEnoughParameters;
                         };
                         switch (a) {
@@ -63,7 +64,7 @@ pub fn translate(allocator: *std.mem.Allocator, text: []const u8) ![]const u8 {
                     }
                     if (instruction.number_operands() == 2) {
                         const b = i.op_b orelse {
-                            std.log.err(.ASM, "{} requires another parameter line {}", .{ instruction, line_number });
+                            log.err("{} requires another parameter line {}", .{ instruction, line_number });
                             return error.NotEnoughParameters;
                         };
                         switch (b) {
@@ -87,7 +88,7 @@ pub fn translate(allocator: *std.mem.Allocator, text: []const u8) ![]const u8 {
         if (symbols.get(replace_with_symbol.symbol)) |symbol_address| {
             code.items[replace_with_symbol.address] = symbol_address;
         } else {
-            std.log.err(.ASM, "Symbol not found: {}", .{replace_with_symbol.symbol});
+            log.err("Symbol not found: {}", .{replace_with_symbol.symbol});
             was_error = true;
         }
     }
@@ -155,7 +156,7 @@ fn parse_line(text: []const u8) !Line {
                 return line;
             } else {
                 instruction_line.instruction = Instruction.parse(part) orelse {
-                    std.log.err(.ASM, "Unexpected symbol: '{}'", .{part});
+                    log.err("Unexpected symbol: '{}'", .{part});
                     return error.ExpectedInstructionName;
                 };
                 state = 2;
@@ -171,7 +172,7 @@ fn parse_line(text: []const u8) !Line {
                 return line;
             } else {
                 instruction_line.instruction = Instruction.parse(part) orelse {
-                    std.log.err(.ASM, "Unexpected symbol: '{}'", .{part});
+                    log.err("Unexpected symbol: '{}'", .{part});
                     return error.ExpectedInstructionName;
                 };
                 state = 2;
@@ -185,7 +186,7 @@ fn parse_line(text: []const u8) !Line {
                 state = 4;
             },
             else => {
-                std.log.err(.ASM, "Unexpected symbol: {}", .{part});
+                log.err("Unexpected symbol: {}", .{part});
                 return error.UnexpectedSymbol;
             },
         }

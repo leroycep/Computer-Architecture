@@ -67,20 +67,20 @@ pub export fn upload_program(ptr: [*]u8, len: usize) bool {
     // Convert the LS8 text into actually binary LS8
     if (assembler.translate(allocator, text)) |bytes| {
         defer allocator.free(bytes);
-        std.log.debug(.LS8, "Program: {x}", .{bytes});
+        std.log.debug("Program: {x}", .{bytes});
         for (bytes) |b, idx| {
             cpu.memory[idx] = b;
         }
         return true;
     } else |err| {
-        std.log.err(.LS8, "Failed to translate assembly: {}", .{err});
+        std.log.err("Failed to translate assembly: {}", .{err});
         return false;
     }
 }
 
 pub export fn step() void {
     cpu.step() catch |err| {
-        std.log.err(.LS8, "Error stepping CPU: {}", .{err});
+        std.log.err("Error stepping CPU: {}", .{err});
     };
 }
 
@@ -98,7 +98,7 @@ pub export fn stepMany() bool {
 
     while (!cpu.halted and accumulator >= tick_delta_seconds) {
         cpu.step() catch |err| {
-            std.log.err(.LS8, "Error stepping CPU: {}", .{err});
+            std.log.err("Error stepping CPU: {}", .{err});
             return false;
         };
         accumulator -= tick_delta_seconds;

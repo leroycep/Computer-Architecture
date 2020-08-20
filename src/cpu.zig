@@ -1,6 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const Instruction = @import("./instruction.zig").Instruction;
+const log = std.log.scoped(.emulator);
 
 const DEFAULT_FREQUENCY = 1000000;
 
@@ -142,7 +143,7 @@ pub fn Cpu(comptime R: type, comptime W: type) type {
 
             const flag_val = this.pop_stack();
             if (flag_val & 0b00000111 != flag_val) {
-                std.log.err(.LS8, "interrupt return invalid flags value: {b:0>8}", .{flag_val});
+                log.err("interrupt return invalid flags value: {b:0>8}", .{flag_val});
                 return error.InterruptReturnInvalidFlagsValue;
             }
             this.flags = @bitCast(@TypeOf(this.flags), @intCast(u3, flag_val));
@@ -171,7 +172,7 @@ pub fn Cpu(comptime R: type, comptime W: type) type {
 
             const instruction = Instruction.decode(this.memory[this.program_counter]) catch |e| switch (e) {
                 error.InvalidInstruction => {
-                    std.log.err(.CPU, "Invalid instruction {b:0>8}", .{this.memory[this.program_counter]});
+                    log.err("Invalid instruction {b:0>8}", .{this.memory[this.program_counter]});
                     return e;
                 },
             };
