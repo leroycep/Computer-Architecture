@@ -84,23 +84,24 @@ class CPU:
         self.instruction_table[PRA] = self.unimplemented_op
         self.instruction_table[PRN] = self.op_prn
 
-    def load(self):
+    def load(self, filepath):
         """Load a program into memory."""
 
+        program = []
+        with open(filepath) as f:
+            for line in f.readlines():
+                comment_start = line.find("#")
+                #if comment_start == -1:
+                #    comment_start = len(line)
+                without_comment = line[:comment_start]
+                clean_line = without_comment.strip()
+
+                if clean_line == "":
+                    continue
+
+                program.append(int(clean_line, 2))
+
         address = 0
-
-        # For now, we've just hardcoded a program:
-
-        program = [
-            # From print8.ls8
-            0b10000010,  # LDI R0,8
-            0b00000000,
-            0b00001000,
-            0b01000111,  # PRN R0
-            0b00000000,
-            0b00000001,  # HLT
-        ]
-
         for instruction in program:
             self.ram[address] = instruction
             address += 1
