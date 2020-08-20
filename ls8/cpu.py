@@ -54,7 +54,7 @@ class CPU:
         self.instruction_table[ADD] = self.op_add
         self.instruction_table[SUB] = self.unimplemented_op
         self.instruction_table[DIV] = self.unimplemented_op
-        self.instruction_table[MUL] = self.unimplemented_op
+        self.instruction_table[MUL] = self.op_mul
         self.instruction_table[MOD] = self.unimplemented_op
         self.instruction_table[AND] = self.unimplemented_op
         self.instruction_table[NOT] = self.unimplemented_op
@@ -157,6 +157,9 @@ class CPU:
 
     def op_add(self, op, reg_a, reg_b):
         self.reg[reg_a] += self.reg[reg_b]
+
+    def op_mul(self, op, reg_a, reg_b):
+        self.reg[reg_a] *= self.reg[reg_b]
 
     def op_prn(self, op, reg_a, reg_b):
         print(f"{self.reg[reg_a]:d}", end="")
