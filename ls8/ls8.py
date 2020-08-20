@@ -7,5 +7,9 @@ from cpu import *
 
 cpu = CPU()
 
-cpu.load()
+if len(sys.argv) != 2:
+    print("Incorrect usage, you must pass an ls8 file to this program", file=sys.stderr)
+    sys.exit(1)
+
+cpu.load(sys.argv[1])
 cpu.run()
