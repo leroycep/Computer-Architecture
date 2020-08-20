@@ -49,6 +49,7 @@ class CPU:
         self.reg = [0] * 8
         self.pc = 0
         self.running = True
+        self.flags = 0b00000000
 
         self.instruction_table = {}
         self.instruction_table[NOP] = self.op_nop
@@ -68,10 +69,10 @@ class CPU:
         self.instruction_table[RET] = self.op_ret
         self.instruction_table[POP] = self.op_pop
         self.instruction_table[PUSH] = self.op_push
-        self.instruction_table[JMP] = self.unimplemented_op
-        self.instruction_table[CMP] = self.unimplemented_op
-        self.instruction_table[JEQ] = self.unimplemented_op
-        self.instruction_table[JNE] = self.unimplemented_op
+        self.instruction_table[JMP] = self.op_jmp
+        self.instruction_table[CMP] = self.op_cmp
+        self.instruction_table[JEQ] = self.op_jeq
+        self.instruction_table[JNE] = self.op_jne
         self.instruction_table[JGE] = self.unimplemented_op
         self.instruction_table[JGT] = self.unimplemented_op
         self.instruction_table[JLE] = self.unimplemented_op
@@ -195,3 +196,29 @@ class CPU:
 
     def op_ret(self, op, reg_a, reg_b):
         self.pc = self.pop_stack()
+
+    def op_cmp(self, op, reg_a, reg_b):
+        a = self.reg[reg_a]
+        b = self.reg[reg_b]
+        self.flags = 0b00000000
+        if a == b:
+            self.flags |= 0b00000001
+        if a > b:
+            self.flags |= 0b00000010
+        if a < b:
+            self.flags |= 0b00000100
+
+    def op_jeq(self, op, reg_a, reg_b):
+        if self.flags & 0b00000001 != 0:
+            self.pc = self.reg[reg_a]
+        else:
+            self.pc += 2
+
+    def op_jne(self, op, reg_a, reg_b):
+        if self.flags & 0b00000001 == 0:
+            self.pc = self.reg[reg_a]
+        else:
+            self.pc += 2
+
+    def op_jmp(self, op, reg_a, reg_b):
+        self.pc = self.reg[reg_a]
